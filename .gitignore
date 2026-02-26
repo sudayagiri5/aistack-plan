@@ -1,0 +1,22 @@
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# node
+node_modules/
+dist/
+.next/
+.turbo/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
