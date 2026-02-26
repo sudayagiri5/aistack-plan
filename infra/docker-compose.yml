@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: aistack_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-aistack}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - aistack_pg:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-aistack}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  aistack_pg:
