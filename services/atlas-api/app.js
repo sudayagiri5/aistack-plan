@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 
 app.use("/health", healthRoutes);
-app.use("/api/document", documentRoutes);
+app.use("/api/documents", documentRoutes);
 app.use("/api/chat", chatRoutes);
 
 module.exports = app;
