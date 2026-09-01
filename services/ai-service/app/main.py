@@ -7,6 +7,8 @@ from pathlib import Path
 # Load environment BEFORE importing modules that read it at import time.
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[3] / ".env")
 
+from .retrieval import retrieve, ANSWER_MODEL, SYSTEM_PROMPT
+from .embeddings import embed_texts
 from .db import pool
 from .chunking import extract_text, chunk_text, UnsupportedFileType, ExtractionFailed
 
@@ -78,3 +80,71 @@ def process(req: ProcessRequest):
         )
 
     return {"document_id": req.document_id, "chunks_created": len(chunks)}
+
+class EmbedRequest(BaseModel):
+    document_id: int
+
+
+@app.post("/embed")
+def embed(req: EmbedRequest):
+    with pool.connection() as conn:
+        rows = conn.execute(
+            "SELECT id, content FROM chunks WHERE document_id = %s AND embedding IS NULL ORDER BY chunk_index",
+            (req.document_id,),
+        ).fetchall()
+
+    if not rows:
+        return {"document_id": req.document_id, "embedded": 0, "detail": "nothing to embed"}
+
+    ids = [r[0] for r in rows]
+    texts = [r[1] for r in rows]
+
+    vectors = embed_texts(texts)
+
+    with pool.connection() as conn:
+        for chunk_id, vector in zip(ids, vectors):
+            conn.execute(
+                "UPDATE chunks SET embedding = %s WHERE id = %s",
+                (str(vector), chunk_id),
+            )
+
+    return {"document_id": req.document_id, "embedded": len(vectors)}
+class AnswerRequest(BaseModel):
+    question: str
+    document_id: int | None = None
+    top_k: int = 4
+
+
+@app.post("/chat/answer")
+def answer(req: AnswerRequest):
+    hits = retrieve(req.question, top_k=req.top_k, document_id=req.document_id)
+
+    if not hits:
+        raise HTTPException(status_code=404, detail="No embedded content to search")
+
+    context = "\n\n".join(
+        f"[{i + 1}] (from {h['document_name']}, chunk {h['chunk_index']})\n{h['content']}"
+        for i, h in enumerate(hits)
+    )
+
+    response = client.chat.completions.create(
+        model=ANSWER_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {req.question}"},
+        ],
+    )
+
+    return {
+        "question": req.question,
+        "answer": response.choices[0].message.content,
+        "citations": [
+            {
+                "n": i + 1,
+                "document_name": h["document_name"],
+                "chunk_index": h["chunk_index"],
+                "distance": round(h["distance"], 4),
+            }
+            for i, h in enumerate(hits)
+        ],
+    }
