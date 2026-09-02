@@ -5,7 +5,7 @@ description = ""
 authors = [
     {name = "Raghav",email = "sairaghavuk@gmail.com"}
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<4.0"
 dependencies = [
     "fastapi (>=0.133.1,<0.134.0)",
     "uvicorn (>=0.41.0,<0.42.0)",
@@ -14,7 +14,9 @@ dependencies = [
     "pypdf (>=6.16.2,<7.0.0)",
     "psycopg[binary] (>=3.3.4,<4.0.0)",
     "psycopg-pool (>=3.3.1,<4.0.0)",
-    "python-docx (>=1.2.0,<2.0.0)"
+    "python-docx (>=1.2.0,<2.0.0)",
+    "langgraph (>=1.2.11,<2.0.0)",
+    "langchain-openai (>=1.6.0,<2.0.0)"
 ]
 
 

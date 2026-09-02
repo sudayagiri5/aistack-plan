@@ -11,6 +11,7 @@ from .retrieval import retrieve, ANSWER_MODEL, SYSTEM_PROMPT
 from .embeddings import embed_texts
 from .db import pool
 from .chunking import extract_text, chunk_text, UnsupportedFileType, ExtractionFailed
+from .agent import run_agent
 
 client = OpenAI()
 
@@ -147,4 +148,21 @@ def answer(req: AnswerRequest):
             }
             for i, h in enumerate(hits)
         ],
+    }
+class AgentRequest(BaseModel):
+    question: str
+
+
+@app.post("/chat/agent")
+def chat_agent(req: AgentRequest):
+    try:
+        result = run_agent(req.question)
+    except Exception as e:
+        print("Agent failed:", e)
+        raise HTTPException(status_code=500, detail="Agent execution failed")
+
+    return {
+        "question": req.question,
+        "answer": result["answer"],
+        "tool_calls": result["tool_calls"],
     }
