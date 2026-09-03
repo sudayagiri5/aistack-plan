@@ -2,6 +2,7 @@ from .db import pool
 from .embeddings import embed_query
 
 ANSWER_MODEL = "gpt-4o-mini"
+MAX_DISTANCE = 0.75
 
 SYSTEM_PROMPT = """You answer questions using only the provided context.
 If the context does not contain the answer, say so plainly — do not guess.
@@ -41,4 +42,5 @@ def retrieve(question: str, top_k: int = 4, document_id: int | None = None):
             "distance": float(r[5]),
         }
         for r in rows
+        if float(r[5]) <= MAX_DISTANCE
     ]

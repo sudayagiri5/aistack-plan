@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, serif;
+
+  --color-ink: var(--ink);
+  --color-well: var(--well);
+  --color-rule: var(--rule);
+  --color-paper: var(--paper);
+  --color-graphite: var(--graphite);
+  --color-marker: var(--marker);
+}
+
+@layer base {
+  :root {
+    --ink: #131110;
+    --well: #1D1A18;
+    --rule: #2E2A27;
+    --paper: #E4E7EC;
+    --graphite: #8A8580;
+    --marker: #E8A33D;
+    --ground-from: #17140F;
+    --ground-to: #110F0E;
+    color-scheme: dark;
+  }
+
+  [data-theme="light"] {
+    --ink: #FBFAF8;
+    --well: #F3F0EB;
+    --rule: #E0DAD1;
+    --paper: #23201D;
+    --graphite: #746D65;
+    --marker: #B87516;
+    --ground-from: #FCFBF9;
+    --ground-to: #F5F2ED;
+    color-scheme: light;
+  }
+
+  body {
+    margin: 0;
+    background: linear-gradient(180deg, var(--ground-from) 0%, var(--ground-to) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    color: var(--paper);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}

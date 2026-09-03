@@ -47,4 +47,38 @@ router.get("/", async (req, res) => {
   res.json(result.rows);
 });
 
+// POST /api/documents/:id/process — extract, chunk and embed
+router.post("/:id/process", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "Invalid document id" });
+  }
+
+  const AI = process.env.AI_SERVICE_URL || "http://localhost:8001";
+
+  try {
+    const step = async (path) => {
+      const r = await fetch(`${AI}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document_id: id }),
+      });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.detail || `${path} failed`);
+      return body;
+    };
+
+    const processed = await step("/process");
+    const embedded = await step("/embed");
+
+    res.json({
+      document_id: id,
+      chunks: processed.chunks_created,
+      embedded: embedded.embedded,
+    });
+  } catch (err) {
+    console.error("Processing failed:", err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
 module.exports = router;

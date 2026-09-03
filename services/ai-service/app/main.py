@@ -71,6 +71,7 @@ def process(req: ProcessRequest):
         raise HTTPException(status_code=422, detail="No extractable text found")
 
     with pool.connection() as conn:
+        conn.execute("DELETE FROM chunks WHERE document_id = %s", (req.document_id,))
         for i, content in enumerate(chunks):
             conn.execute(
                 "INSERT INTO chunks (document_id, chunk_index, content) VALUES (%s, %s, %s)",
@@ -121,7 +122,11 @@ def answer(req: AnswerRequest):
     hits = retrieve(req.question, top_k=req.top_k, document_id=req.document_id)
 
     if not hits:
-        raise HTTPException(status_code=404, detail="No embedded content to search")
+        return {
+            "question": req.question,
+            "answer": "I couldn't find anything relevant to that in your documents.",
+            "citations": [],
+        }
 
     context = "\n\n".join(
         f"[{i + 1}] (from {h['document_name']}, chunk {h['chunk_index']})\n{h['content']}"
@@ -145,6 +150,7 @@ def answer(req: AnswerRequest):
                 "document_name": h["document_name"],
                 "chunk_index": h["chunk_index"],
                 "distance": round(h["distance"], 4),
+                "excerpt": h["content"][:180].strip(),
             }
             for i, h in enumerate(hits)
         ],
@@ -165,4 +171,5 @@ def chat_agent(req: AgentRequest):
         "question": req.question,
         "answer": result["answer"],
         "tool_calls": result["tool_calls"],
+        "citations": result["citations"],
     }
