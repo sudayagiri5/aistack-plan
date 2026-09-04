@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -11,7 +12,7 @@ from .retrieval import retrieve, ANSWER_MODEL, SYSTEM_PROMPT
 from .embeddings import embed_texts
 from .db import pool
 from .chunking import extract_text, chunk_text, UnsupportedFileType, ExtractionFailed
-from .agent import run_agent
+from .agent import run_agent, stream_agent
 
 client = OpenAI()
 
@@ -173,3 +174,20 @@ def chat_agent(req: AgentRequest):
         "tool_calls": result["tool_calls"],
         "citations": result["citations"],
     }
+import json
+
+@app.post("/chat/agent/stream")
+def chat_agent_stream(req: AgentRequest):
+    def events():
+        try:
+            for event in stream_agent(req.question):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            print("Agent stream failed:", e)
+            yield f'data: {json.dumps({"type": "error", "message": "Agent execution failed"})}\n\n'
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

@@ -33,4 +33,37 @@ export const api = {
     if (!res.ok) throw new Error(data.error || "Processing failed");
     return data;
   },
+
+  askAgentStream: async (question, onEvent) => {
+    const res = await fetch("/api/chat/agent/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+
+    if (!res.ok || !res.body) throw new Error("Could not start the stream");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const messages = buffer.split("\n\n");
+      buffer = messages.pop() ?? "";
+
+      for (const message of messages) {
+        const line = message.trim();
+        if (!line.startsWith("data:")) continue;
+        try {
+          onEvent(JSON.parse(line.slice(5).trim()));
+        } catch {
+          // ignore malformed fragments
+        }
+      }
+    }
+  },
 };

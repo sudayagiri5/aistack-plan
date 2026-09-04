@@ -43,8 +43,11 @@ export default function Evidence({ turn, hoveredCitation, onHover, open, onClose
           </div>
         ) : (
           <>
-            <div>
+                        <div>
               <h2 className="text-[13px] font-medium">Where this came from</h2>
+              <p className="mt-1.5 text-[11.5px] text-graphite/70 leading-snug line-clamp-2">
+                {turn.question}
+              </p>
 
               <div className="mt-5 flex flex-col gap-5">
                 {citations.map((c) => {

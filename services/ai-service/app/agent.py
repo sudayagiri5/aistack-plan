@@ -10,10 +10,10 @@ AGENT_SYSTEM_PROMPT = """You are AtlasAssist, an assistant that answers question
 
 Rules:
 - Answer only from information returned by your tools. Never use prior knowledge about the world.
-- If the tools return nothing relevant, say plainly that the documents do not contain the answer.
+- Always call search_documents WITHOUT a document_id. Never guess which document is relevant — search everything.
 - If the user asks about several distinct topics, search for each topic separately.
-- If the user names a specific document, list the documents first to find its id, then search within that document only.
-- Always state which document and chunk each part of your answer came from.
+- If the tools return nothing relevant, say plainly that the documents do not contain the answer.
+- Always state which document and passage each part of your answer came from.
 - Only create an action item when the user explicitly asks for a task or reminder."""
 
 llm = ChatOpenAI(model=AGENT_MODEL, temperature=0)
@@ -33,6 +33,35 @@ def run_agent(question: str) -> dict:
             trace.append({"tool": call["name"], "args": call["args"]})
 
     # Re-run retrieval on the agent's own search queries so the UI can show sources.
+    citations = _citations_for(trace, question)
+
+    return {"answer": answer, "tool_calls": trace, "citations": citations}
+def stream_agent(question: str):
+    """Yield events as the agent works: tool calls first, then the answer, then sources."""
+    trace = []
+    answer = ""
+
+    for chunk in agent.stream(
+        {"messages": [{"role": "user", "content": question}]},
+        stream_mode="updates",
+    ):
+        for node_output in chunk.values():
+            for message in node_output.get("messages", []):
+                for call in getattr(message, "tool_calls", []) or []:
+                    step = {"tool": call["name"], "args": call["args"]}
+                    trace.append(step)
+                    yield {"type": "step", "step": step}
+
+                content = getattr(message, "content", "")
+                if content and not getattr(message, "tool_calls", None):
+                    answer = content
+
+    yield {"type": "answer", "answer": answer}
+    yield {"type": "citations", "citations": _citations_for(trace, question)}
+
+
+def _citations_for(trace, question):
+    """Replay the agent's searches to collect the passages behind its answer."""
     seen, citations = set(), []
     for call in trace:
         if call["tool"] != "search_documents":
@@ -55,5 +84,4 @@ def run_agent(question: str) -> dict:
     citations = citations[:4]
     for i, c in enumerate(citations):
         c["n"] = i + 1
-
-    return {"answer": answer, "tool_calls": trace, "citations": citations}
+    return citations

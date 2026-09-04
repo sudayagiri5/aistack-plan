@@ -33,6 +33,7 @@ export default function App() {
   const [hoveredCitation, setHoveredCitation] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [selectedTurnId, setSelectedTurnId] = useState(null);
+  const [liveSteps, setLiveSteps] = useState([]);
   const [navOpen, setNavOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
     const [theme, setTheme] = useState(
@@ -57,35 +58,59 @@ export default function App() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [turns, thinking]);
 
-  const ask = useCallback(async () => {
+    const ask = useCallback(async () => {
     const question = input.trim();
     if (!question || thinking) return;
 
     setInput("");
     setError(null);
     setSelectedTurnId(null);
+    setLiveSteps([]);
     setThinking(true);
 
     try {
-      const data = selectedId
-        ? await api.ask(question, selectedId)
-        : await api.askAgent(question);
+      if (selectedId) {
+        // Scoped questions use fixed retrieval — fast enough not to need streaming.
+        const data = await api.ask(question, selectedId);
+        setTurns((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            question,
+            answer: data.answer,
+            citations: data.citations ?? [],
+            toolCalls: [],
+          },
+        ]);
+      } else {
+        let answer = "";
+        let citations = [];
+        const toolCalls = [];
 
-      setTurns((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          question,
-          answer: data.answer,
-          citations: data.citations ?? [],
-          toolCalls: data.tool_calls ?? [],
-        },
-      ]);
+        await api.askAgentStream(question, (event) => {
+          if (event.type === "step") {
+            toolCalls.push(event.step);
+            setLiveSteps((prev) => [...prev, event.step]);
+          } else if (event.type === "answer") {
+            answer = event.answer;
+          } else if (event.type === "citations") {
+            citations = event.citations;
+          } else if (event.type === "error") {
+            throw new Error(event.message);
+          }
+        });
+
+        setTurns((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), question, answer, citations, toolCalls },
+        ]);
+      }
     } catch (e) {
       setError(e.message);
       setInput(question);
     } finally {
       setThinking(false);
+      setLiveSteps([]);
     }
   }, [input, thinking, selectedId]);
 
@@ -222,14 +247,27 @@ export default function App() {
               );
             })}
 
-            {thinking && (
+                        {thinking && (
               <div className="flex flex-col gap-5">
-                <div className="flex items-center gap-2.5">
-                  <span className="h-1 w-1 rounded-full bg-marker animate-pulse" />
-                  <span className="text-graphite text-xs">
-                    {selectedDoc ? `Searching ${selectedDoc.original_name}…` : "Choosing where to look…"}
-                  </span>
+                <div className="flex flex-col gap-2.5">
+                  {liveSteps.map((step, i) => (
+                    <div key={i} className="flex items-center gap-2.5">
+                      <span className="h-1 w-1 shrink-0 rounded-full bg-marker" />
+                      <span className="text-graphite text-xs">{describeStep(step)}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2.5">
+                    <span className="h-1 w-1 shrink-0 rounded-full bg-marker animate-pulse" />
+                    <span className="text-graphite text-xs">
+                      {selectedDoc
+                        ? `Searching ${selectedDoc.original_name}…`
+                        : liveSteps.length === 0
+                        ? "Choosing where to look…"
+                        : "Writing the answer…"}
+                    </span>
+                  </div>
                 </div>
+
                 <div className="flex flex-col gap-3.5">
                   {[100, 94, 78].map((w, i) => (
                     <div
@@ -289,4 +327,14 @@ export default function App() {
       />
     </div>
   );
+}
+function describeStep(call) {
+  const { tool, args = {} } = call;
+  if (tool === "get_document_list") return "Listed the available documents";
+  if (tool === "search_documents") {
+    const scope = args.document_id ? ` in document ${args.document_id}` : "";
+    return `Searched “${args.query}”${scope}`;
+  }
+  if (tool === "create_action_item") return `Created the task “${args.title}”`;
+  return tool;
 }
